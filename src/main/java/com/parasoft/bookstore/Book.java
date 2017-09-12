@@ -25,11 +25,11 @@ public class Book extends Item implements Serializable{
 	    throws ItemNotFoundException
 	{
 		super(id, title, price, stock);
-        this.isbn = isbn;
-        publication_date = year;
-        this.authors = authors;
-        this.publisher = publisher;
-        this.description = description;
+        setISBN(isbn);
+        setPublicationDate(year);
+        setAuthors(authors);
+        setPublisher(publisher);
+        setDescription(description);
 	}
 
     public String getISBN() {
@@ -78,5 +78,13 @@ public class Book extends Item implements Serializable{
 
     public void refreshTimestamp() {
         timestamp = System.currentTimeMillis();
+    }
+    
+    private String returnNull() {
+        return null;
+    }
+    private void testABC() {
+        String testString = returnNull();
+       testString.isEmpty();
     }
 }
