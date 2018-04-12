@@ -1,0 +1,67 @@
+box: maven:3.5-jdk-8
+build:
+  steps:
+    - script:
+        name: get code / compile / stage for docker .
+        code: |
+          cd /pipeline/source
+          mvn package "-Dtest=*Test, !*ApplicationTest*" "-Dmaven.exec.skip=true"
+            
+build-docker-image:
+  box:
+    id: spronq/pp2:alpine-jre8-curl-ssh
+    username: $DOCKER_HUB_USERNAME
+    password: $DOCKER_HUB_PASSWORD
+  steps:
+    - script:
+        name: info and set parameters
+        code: |
+          echo $WERCKER_SOURCE_DIR
+          echo "Building docker image for MN-STAG Portal App"
+          WORKDIR=/usr/share/stagportal
+    - script:
+        name: copy structure
+        code: |
+          echo "Create directory " $WORKDIR
+          mkdir -p $WORKDIR
+          echo "Copying filestructure"
+          cd $WERCKER_SOURCE_DIR/target
+          cp -Rp *.jar lib $WORKDIR
+          echo "Create $WORKDIR/build.info"
+          echo $WERCKER_GIT_BRANCH/$WERCKER_GIT_COMMIT > $WORKDIR/build.info
+          echo "Change owner and be sure that the startscript is executable "
+          chown -R daemon.daemon $WORKDIR
+          chmod 755 $WORKDIR/stagportal*.jar
+    - script:
+          name: remove pipeline/source leave wercker.yml
+          code: |
+            echo "Removing source directory" $WERCKER_SOURCE_DIR
+            cd  $WERCKER_SOURCE_DIR; ls | grep -v wercker.yml | xargs rm -rf          
+    - internal/docker-push:
+        author: STAG-PORTAL <stagportal@mn.nl>
+        tag: $DOCKER_HUB_TAG
+        username: $DOCKER_HUB_USERNAME
+        password: $DOCKER_HUB_PASSWORD
+        repository: $DOCKER_HUB_REPO
+        registry: $DOCKER_REGISTRY
+        ports: $DOCKER_PORT
+        user: daemon
+        working-dir: /usr/share/stagportal
+        entrypoint: java -jar stagportal.jar
+        env: "MNWGP_GIT_COMMIT=$WERCKER_GIT_BRANCH/$WERCKER_GIT_COMMIT"
+        labels: "nl.mn.wgp.commit=$WERCKER_GIT_BRANCH/$WERCKER_GIT_COMMIT"
+
+deploy-to-server:
+  box:
+    id: node:6.9.1
+  steps:
+    - add-to-known_hosts:
+        hostname: mn.spronq.com
+        fingerprint: c5:e1:2b:1a:02:cc:6b:93:d0:a1:f7:2f:14:1a:90:5e
+    - add-ssh-key:
+        keyname: WEBDEPLOYKEY
+    - script:
+        name: send deploy command
+        code: |
+          echo "send deploy command to server"
+          ssh -o StrictHostKeyChecking=no spronq@mn.spronq.com bin/redeploy_werkgeversportaal_backend.sh
