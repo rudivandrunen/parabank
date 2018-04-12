@@ -5,63 +5,54 @@ build:
         name: get code / compile / stage for docker .
         code: |
           cd /pipeline/source
-          mvn package "-Dtest=*Test, !*ApplicationTest*" "-Dmaven.exec.skip=true"
+          mvn package "-Dtest=*Test, !*ApplicationTest*"
             
-build-docker-image:
+build-docker:
   box:
-    id: spronq/pp2:alpine-jre8-curl-ssh
-    username: $DOCKER_HUB_USERNAME
-    password: $DOCKER_HUB_PASSWORD
+    id: tomcat:alpine
   steps:
     - script:
-        name: info and set parameters
+        name: copy warfile
         code: |
-          echo $WERCKER_SOURCE_DIR
-          echo "Building docker image for MN-STAG Portal App"
-          WORKDIR=/usr/share/stagportal
+          cd /pipeline/source
+          cp target/*.war /usr/local/tomcat/webapps/PARABANK.war
     - script:
-        name: copy structure
+        name: remove pipeline/source leave wercker.yml
         code: |
-          echo "Create directory " $WORKDIR
-          mkdir -p $WORKDIR
-          echo "Copying filestructure"
-          cd $WERCKER_SOURCE_DIR/target
-          cp -Rp *.jar lib $WORKDIR
-          echo "Create $WORKDIR/build.info"
-          echo $WERCKER_GIT_BRANCH/$WERCKER_GIT_COMMIT > $WORKDIR/build.info
-          echo "Change owner and be sure that the startscript is executable "
-          chown -R daemon.daemon $WORKDIR
-          chmod 755 $WORKDIR/stagportal*.jar
+          echo "Removing source directory" $WERCKER_SOURCE_DIR
+          cd  $WERCKER_SOURCE_DIR; ls | grep -v wercker.yml | xargs rm -rf
     - script:
-          name: remove pipeline/source leave wercker.yml
-          code: |
-            echo "Removing source directory" $WERCKER_SOURCE_DIR
-            cd  $WERCKER_SOURCE_DIR; ls | grep -v wercker.yml | xargs rm -rf          
+        name: enable manager
+        code: |
+          sed -i '$ d' /usr/local/tomcat/conf/tomcat-users.xml
+          echo "<role rolename=\"manager-gui\"/>" >> /usr/local/tomcat/conf/tomcat-users.xml
+          echo "<user username=\"tomcat\" password=\"edsn_s3cret\" roles=\"manager-gui\"/>" >> /usr/local/tomcat/conf/tomcat-users.xml
+          echo "</tomcat-users>" >> /usr/local/tomcat/conf/tomcat-users.xml
+          # sed -i -e 's/127/\\d+/g' /usr/local/tomcat/webapps/manager/META-INF/context.xml
+          sed -i -e 's/127/10/g' /usr/local/tomcat/webapps/manager/META-INF/context.xml
     - internal/docker-push:
-        author: STAG-PORTAL <stagportal@mn.nl>
+        registry: $DOCKER_HUB_REGISTRY
+        author: Xlexit <r.van.drunen@xlexit.com>
         tag: $DOCKER_HUB_TAG
         username: $DOCKER_HUB_USERNAME
         password: $DOCKER_HUB_PASSWORD
         repository: $DOCKER_HUB_REPO
-        registry: $DOCKER_REGISTRY
         ports: $DOCKER_PORT
-        user: daemon
-        working-dir: /usr/share/stagportal
-        entrypoint: java -jar stagportal.jar
-        env: "MNWGP_GIT_COMMIT=$WERCKER_GIT_BRANCH/$WERCKER_GIT_COMMIT"
-        labels: "nl.mn.wgp.commit=$WERCKER_GIT_BRANCH/$WERCKER_GIT_COMMIT"
-
-deploy-to-server:
+        user: root
+        working-dir: /usr/local/tomcat
+        entrypoint: "/usr/local/tomcat/bin/catalina.sh run"
+        
+deploy-server:
   box:
-    id: node:6.9.1
+    id: atlassianlabs/docker-node-jdk-chrome-firefox
   steps:
-    - add-to-known_hosts:
-        hostname: mn.spronq.com
-        fingerprint: c5:e1:2b:1a:02:cc:6b:93:d0:a1:f7:2f:14:1a:90:5e
     - add-ssh-key:
-        keyname: WEBDEPLOYKEY
+        keyname: DEPLOYKEY
+    - add-to-known_hosts:
+        hostname: edsn-back3.xlexit.com
+        fingerprint: ad:53:ac:be:9b:8b:d4:14:91:35:a5:d9:89:87:f0:29
     - script:
-        name: send deploy command
+        name: start deploy
         code: |
-          echo "send deploy command to server"
-          ssh -o StrictHostKeyChecking=no spronq@mn.spronq.com bin/redeploy_werkgeversportaal_backend.sh
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null edsn@edsn-back3.xlexit.com "/home/edsn/bin/deploy-gui-new.sh"
+          echo "Deploy Done"
