@@ -5,7 +5,6 @@ build:
         name: get  code / compile / stage for docker .
         code: |
           cd /pipeline/source
-#          mvn clean install "-Dtest=*Test, !*ApplicationTest*"
           mvn clean install
             
 build-docker:
