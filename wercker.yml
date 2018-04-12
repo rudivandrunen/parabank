@@ -5,7 +5,8 @@ build:
         name: get  code / compile / stage for docker .
         code: |
           cd /pipeline/source
-          mvn clean install "-Dtest=*Test, !*ApplicationTest*"
+#          mvn clean install "-Dtest=*Test, !*ApplicationTest*"
+          mvn clean install
             
 build-docker:
   box:
@@ -15,7 +16,7 @@ build-docker:
         name: copy warfile
         code: |
           cd /pipeline/source
-          cp target/*.war /usr/local/tomcat/webapps/PARABANK.war
+          cp target/parabank.war /usr/local/tomcat/webapps/PARABANK.war
     - script:
         name: remove pipeline/source leave wercker.yml
         code: |
